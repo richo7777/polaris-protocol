@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polaris Protocol — Arctic Tactical FPS</title>
+<style>
+  :root { --cyan: #35d5ff; --blue: #5db4ff; --red: #ff6a5e; --panel: rgba(8, 16, 26, 0.78); }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1420; font-family: 'Segoe UI', system-ui, sans-serif; color: #e8f1f8; }
+  #game, #game canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+  /* ---------- HUD ---------- */
+  #hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+  #topbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; }
+  #timer { font-size: 30px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 8px #000; }
+  #scoreRow { font-size: 20px; font-weight: 700; margin-top: 2px; text-shadow: 0 2px 8px #000; }
+  #scoreP { color: var(--blue); } #scoreG { color: var(--red); }
+  #round { font-size: 11px; letter-spacing: 3px; opacity: 0.8; margin-top: 2px; }
+  #minimap { position: absolute; top: 12px; left: 12px; border: 1px solid rgba(93, 180, 255, 0.5); border-radius: 4px; background: rgba(8, 14, 22, 0.6); }
+  #feed { position: absolute; top: 12px; right: 14px; text-align: right; font-size: 13px; line-height: 1.7; text-shadow: 0 1px 4px #000; }
+  #bl { position: absolute; left: 16px; bottom: 16px; font-size: 15px; }
+  #bl b { font-size: 34px; }
+  #bl .lbl { font-size: 11px; letter-spacing: 2px; opacity: 0.75; }
+  #br { position: absolute; right: 16px; bottom: 16px; text-align: right; }
+  #ammo { font-size: 34px; font-weight: 700; text-shadow: 0 2px 8px #000; }
+  #ammo small { font-size: 16px; opacity: 0.7; }
+  #money { font-size: 18px; color: #ffd76b; font-weight: 700; text-shadow: 0 2px 6px #000; }
+  #weaponName { font-size: 12px; letter-spacing: 2px; opacity: 0.8; }
+  #hint { position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); font-size: 14px; color: #ffb3ac; text-shadow: 0 1px 4px #000; }
+  /* crosshair: four lines whose gap follows live spread */
+  #cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 8px; }
+  #cross i { position: absolute; background: #e8f1f8; box-shadow: 0 0 3px #000; }
+  #cross i:nth-child(1) { left: calc(var(--gap) * -1 - 8px); top: -1px; width: 8px; height: 2px; }
+  #cross i:nth-child(2) { left: var(--gap); top: -1px; width: 8px; height: 2px; }
+  #cross i:nth-child(3) { top: calc(var(--gap) * -1 - 8px); left: -1px; width: 2px; height: 8px; }
+  #cross i:nth-child(4) { top: var(--gap); left: -1px; width: 2px; height: 8px; }
+  #cross::after { content: ''; position: absolute; left: -1.5px; top: -1.5px; width: 3px; height: 3px; background: #e8f1f8; border-radius: 50%; }
+  #hitmark { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 26px; height: 26px; opacity: 0; transition: opacity 0.1s; pointer-events: none; }
+  #hitmark i { position: absolute; background: #fff; }
+  #hitmark i:nth-child(1) { left: 0; top: 0; width: 8px; height: 2px; }
+  #hitmark i:nth-child(2) { right: 0; top: 0; width: 8px; height: 2px; }
+  #hitmark i:nth-child(3) { left: 0; bottom: 0; width: 8px; height: 2px; }
+  #hitmark i:nth-child(4) { right: 0; bottom: 0; width: 8px; height: 2px; }
+  #scope { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 34%, rgba(0, 0, 0, 0.92) 36%); pointer-events: none; }
+  #scope::before, #scope::after { content: ''; position: absolute; background: rgba(0, 0, 0, 0.85); }
+  #scope::before { left: 50%; top: 0; width: 1px; height: 100%; }
+  #scope::after { top: 50%; left: 0; width: 100%; height: 1px; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+  #capBar { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: 260px; text-align: center; }
+  #capLabel { font-size: 12px; letter-spacing: 2px; margin-bottom: 4px; text-shadow: 0 1px 4px #000; }
+  #capBar .track { height: 8px; background: rgba(255, 255, 255, 0.18); border-radius: 4px; overflow: hidden; }
+  #capFill { height: 100%; width: 0%; background: var(--cyan); }
+  #banner { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 12px #000; }
+  #banner b { display: block; font-size: 34px; letter-spacing: 4px; white-space: nowrap; }
+  #banner span { font-size: 15px; opacity: 0.9; }
+  /* ---------- buy menu ---------- */
+  #buyMenu { position: absolute; top: 50%; right: 24px; transform: translateY(-50%); width: 360px; background: var(--panel); border: 1px solid rgba(93, 180, 255, 0.4); border-radius: 8px; padding: 14px; pointer-events: auto; z-index: 8; }
+  #buyMenu h2 { font-size: 16px; letter-spacing: 3px; margin-bottom: 4px; }
+  #buyMoney { color: #ffd76b; font-weight: 700; margin-bottom: 10px; }
+  .buy-item { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; margin: 5px 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 5px; cursor: pointer; font-size: 13px; }
+  .buy-item:hover { background: rgba(53, 213, 255, 0.18); border-color: var(--cyan); }
+  .buy-item span { opacity: 0.65; flex: 1; }
+  .buy-item i { color: #ffd76b; font-style: normal; font-weight: 700; }
+  #closeBuyBtn { margin-top: 8px; width: 100%; padding: 8px; background: #1c2c3e; color: #e8f1f8; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 5px; cursor: pointer; }
+  /* ---------- screens ---------- */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: radial-gradient(ellipse at 50% 120%, rgba(53, 213, 255, 0.16), transparent 60%), linear-gradient(rgba(6, 12, 20, 0.55), rgba(6, 12, 20, 0.82)); z-index: 10; }
+  .screen h1 { font-size: 56px; letter-spacing: 8px; color: #fff; text-shadow: 0 0 30px rgba(53, 213, 255, 0.7); }
+  .screen h2 { font-size: 15px; letter-spacing: 5px; color: var(--cyan); margin: 8px 0 18px; font-weight: 400; }
+  .screen p { max-width: 560px; font-size: 15px; line-height: 1.7; opacity: 0.9; }
+  .screen .controls { margin: 18px 0; font-size: 13px; line-height: 2; opacity: 0.85; background: rgba(255, 255, 255, 0.05); padding: 12px 22px; border-radius: 8px; text-align: left; }
+  .screen .controls b { color: var(--cyan); }
+  .bigBtn { margin-top: 10px; padding: 14px 44px; font-size: 18px; letter-spacing: 3px; font-weight: 700; color: #06222e; background: var(--cyan); border: none; border-radius: 6px; cursor: pointer; }
+  .bigBtn:hover { background: #6fe3ff; }
+  .tiny { margin-top: 16px; font-size: 12px; opacity: 0.6; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud" class="hidden">
+  <canvas id="minimap" width="132" height="132"></canvas>
+  <div id="topbar">
+    <div id="timer">1:40</div>
+    <div id="scoreRow"><span id="scoreP">0</span> — <span id="scoreG">0</span></div>
+    <div id="round">ROUND 1 / 13</div>
+  </div>
+  <div id="feed"></div>
+  <div id="bl"><div class="lbl">HEALTH</div><b id="health">100</b> &nbsp; <span class="lbl">ARMOR</span> <b id="armor" style="font-size:22px">0</b></div>
+  <div id="br"><div id="weaponName">P9 FROSTBITE</div><div id="ammo">12 <small>/ 48</small></div><div id="money">$800</div></div>
+  <div id="hint"></div>
+  <div id="cross"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmark"><i></i><i></i><i></i><i></i></div>
+  <div id="scope" class="hidden"></div>
+  <div id="flash"></div>
+  <div id="capBar" class="hidden"><div id="capLabel">CAPTURING REACTOR</div><div class="track"><div id="capFill"></div></div></div>
+  <div id="banner" class="hidden"></div>
+</div>
+
+<div id="buyMenu" class="hidden">
+  <h2>BUY MENU — B to close</h2>
+  <div id="buyMoney">$800</div>
+  <div id="buyList"></div>
+  <button id="closeBuyBtn">DEPLOY</button>
+</div>
+
+<div id="startScreen" class="screen">
+  <h1>POLARIS PROTOCOL</h1>
+  <h2>ARCTIC RESEARCH STATION · 5v5 TACTICAL FPS</h2>
+  <p>Night falls on Station Polaris. Two squads fight for the Reactor at the heart of the courtyard — eliminate the enemy team, or hold the control point until it is yours. First to 7 rounds takes the match.</p>
+  <div class="controls">
+    <b>WASD</b> move &nbsp;·&nbsp; <b>Mouse</b> aim &nbsp;·&nbsp; <b>Click</b> fire &nbsp;·&nbsp; <b>R</b> reload<br>
+    <b>B</b> buy menu &nbsp;·&nbsp; <b>1 / 2</b> switch weapon &nbsp;·&nbsp; <b>4 / 5 + G</b> flash / smoke<br>
+    <b>Shift</b> walk quietly &nbsp;·&nbsp; <b>Ctrl</b> crouch &nbsp;·&nbsp; <b>Right-click</b> scope (sniper) &nbsp;·&nbsp; <b>P</b> pause
+  </div>
+  <button id="deployBtn" class="bigBtn">▶ DEPLOY</button>
+  <div class="tiny">Runs fully offline — no network, no downloads. Best in desktop Chrome.</div>
+</div>
+
+<div id="endScreen" class="screen hidden">
+  <h1 id="endTitle">POLARIS WINS</h1>
+  <h2 id="endSub"></h2>
+  <button id="againBtn" class="bigBtn">↻ PLAY AGAIN</button>
+</div>
+
+<div id="pauseScreen" class="screen hidden">
+  <h1>PAUSED</h1>
+  <h2>THE STORM WAITS FOR NO ONE — EXCEPT NOW</h2>
+  <button id="resumeBtn" class="bigBtn">▶ RESUME</button>
+</div>
+
+<div id="spec" class="hidden"></div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
